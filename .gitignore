@@ -47,3 +47,6 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+# Skills e IA
+.cursor/
