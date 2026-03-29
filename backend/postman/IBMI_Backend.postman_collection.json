@@ -1,0 +1,107 @@
+{
+  "info": {
+    "name": "IBMI Backend",
+    "description": "Rotas da API FastAPI para testes no Postman. Inicie o servidor com: `uvicorn app.main:app --reload` (na pasta backend com venv ativo).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/api/v1/health",
+        "description": "Health check. Resposta esperada: 200 e body {\"status\": \"ok\"}."
+      }
+    },
+    {
+      "name": "OpenAPI (JSON)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/api/v1/openapi.json",
+        "description": "Especificação OpenAPI. Use para importar a API no Postman (Import > Link)."
+      }
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login (POST)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"usuario@exemplo.com\",\n  \"password\": \"senha\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/auth/login",
+            "description": "Em implementação."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Pessoas & Ministérios",
+      "item": [
+        {
+          "name": "Listar membros (GET)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/v1/pessoas-ministerios/membros",
+            "description": "Em implementação."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Estrutura Eclesiástica",
+      "item": [
+        {
+          "name": "Listar igrejas (GET)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/v1/estrutura-eclesiastica/igrejas",
+            "description": "Em implementação."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Agenda & Escalas",
+      "item": [
+        {
+          "name": "Listar ocorrências (GET)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/v1/agenda-escalas/ocorrencias",
+            "description": "Em implementação."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Relatórios",
+      "item": [
+        {
+          "name": "Relatório por período (GET)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/v1/relatorios/eventos-periodo",
+            "description": "Em implementação."
+          }
+        }
+      ]
+    }
+  ]
+}
