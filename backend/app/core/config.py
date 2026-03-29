@@ -36,3 +36,8 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+@property
+def effective_database_url(self) -> str:
+    import os
+    return os.getenv("ALEMBIC_DATABASE_URL") or self.DATABASE_URL
