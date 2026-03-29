@@ -1,7 +1,7 @@
 """Configuração da aplicação via variáveis de ambiente."""
-from functools import lru_cache
-from typing import List
+from typing import List, Optional
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -23,6 +23,13 @@ class Settings(BaseSettings):
     # ─── Banco de Dados ───────────────────────────────────────────────────────
     DATABASE_URL: str = "postgresql+asyncpg://ibmi:ibmi@db:5432/ibmi"
 
+    # Override para uso local fora do Docker (host=localhost).
+    # Quando definida, tem prioridade sobre DATABASE_URL.
+    ALEMBIC_DATABASE_URL: Optional[str] = None
+
+    # Preenchida automaticamente pelo validator — use esta no engine.
+    EFFECTIVE_DATABASE_URL: str = ""
+
     # ─── Segurança ────────────────────────────────────────────────────────────
     SECRET_KEY: str = "change-me-in-production"
     ALGORITHM: str = "HS256"
@@ -32,12 +39,18 @@ class Settings(BaseSettings):
     # ─── CORS ─────────────────────────────────────────────────────────────────
     ALLOWED_ORIGINS: List[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
 
+    @model_validator(mode="after")
+    def resolve_database_url(self) -> "Settings":
+        """
+        Resolve a URL efetiva do banco após todos os campos serem carregados.
 
-@lru_cache
+        Prioridade:
+          1. ALEMBIC_DATABASE_URL — uso local fora do Docker
+          2. DATABASE_URL — padrão (host=db, dentro do Docker)
+        """
+        self.EFFECTIVE_DATABASE_URL = self.ALEMBIC_DATABASE_URL or self.DATABASE_URL
+        return self
+
+
 def get_settings() -> Settings:
     return Settings()
-
-@property
-def effective_database_url(self) -> str:
-    import os
-    return os.getenv("ALEMBIC_DATABASE_URL") or self.DATABASE_URL

@@ -18,6 +18,10 @@ backend/
 │   ├── env.py                          # Engine async + resolução de DATABASE_URL
 │   ├── script.py.mako                  # Template para arquivos de migration
 │   └── versions/                       # Migrations geradas
+│       ├── 20260317_221334_initial_schema.py
+│       └── 20260329_000000_add_refresh_tokens.py
+├── scripts/
+│   └── create_admin.py                 # CLI para criar primeiro usuário ADMIN
 └── app/
     ├── main.py                         # Entrada FastAPI, lifespan, CORS
     ├── shared/
@@ -26,17 +30,20 @@ backend/
     ├── core/
     │   ├── config.py                   # Settings via Pydantic Settings
     │   ├── database.py                 # SQLAlchemy 2.0 async, get_db
-    │   └── security.py                 # JWT, hash de senha
+    │   └── security.py                 # JWT, hash de senha (bcrypt direto, sem passlib)
     ├── api/
-    │   ├── deps.py                     # Dependências compartilhadas (get_current_user)
+    │   ├── deps.py                     # get_current_user, require_admin, CurrentUser, AdminUser
     │   └── v1/
     │       └── router.py               # Agrega todos os routers
     ├── auth/                           # Contexto: Autenticação
     │   ├── models/
-    │   │   └── usuario.py              # Model: Usuario (credenciais + perfil)
+    │   │   ├── usuario.py              # Model: Usuario (credenciais + perfil)
+    │   │   └── refresh_token.py        # Model: RefreshToken (1 sessão por usuário)
     │   ├── schemas/
+    │   │   └── auth.py                 # LoginRequest, RegisterRequest, TokenResponse, etc.
     │   ├── services/
-    │   └── api.py
+    │   │   └── auth_service.py         # login, register, refresh, logout
+    │   └── api.py                      # POST /login, /refresh, /logout, /register; GET /me
     ├── estrutura_eclesiastica/         # Contexto: Estrutura Eclesiástica
     │   ├── models/
     │   │   └── igreja.py              # Models: Igreja, Departamento
@@ -78,8 +85,8 @@ cp .env.example .env
 
 | Variável | Descrição | Exemplo |
 |---|---|---|
-| `DATABASE_URL` | URL do banco usada pela aplicação (host `db` = Docker) | `postgresql+asyncpg://ibmi:ibmi@db:5432/ibmi` |
-| `ALEMBIC_DATABASE_URL` | URL usada pelo Alembic localmente (host `localhost`) | `postgresql+asyncpg://ibmi:ibmi@localhost:5432/ibmi` |
+| `DATABASE_URL` | URL usada dentro do Docker (host `db`) | `postgresql+asyncpg://ibmi:ibmi@db:5432/ibmi` |
+| `ALEMBIC_DATABASE_URL` | URL para uso local fora do Docker (host `localhost`) | `postgresql+asyncpg://ibmi:ibmi@localhost:5432/ibmi` |
 | `SECRET_KEY` | Chave para assinar tokens JWT | Gerar com o comando abaixo |
 | `ALGORITHM` | Algoritmo JWT | `HS256` |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Validade do access token | `30` |
@@ -92,9 +99,9 @@ Gerar `SECRET_KEY`:
 python -c "import secrets; print(secrets.token_hex(32))"
 ```
 
-> **Importante:** `DATABASE_URL` aponta para `db` (hostname do container Docker).
-> `ALEMBIC_DATABASE_URL` aponta para `localhost` (para rodar migrações fora do container).
-> Ambas coexistem no mesmo `.env`.
+> **Importante:** `ALEMBIC_DATABASE_URL` é usada tanto pelo Alembic quanto pelo uvicorn
+> quando rodando fora do Docker. A aplicação resolve automaticamente:
+> se `ALEMBIC_DATABASE_URL` estiver definida, ela tem prioridade sobre `DATABASE_URL`.
 
 ---
 
@@ -128,7 +135,7 @@ cp .env.example .env
 # Editar .env: ajustar SECRET_KEY e confirmar as URLs
 ```
 
-### 4. Subir o banco de dados
+### 4. Subir apenas o banco de dados
 
 ```bash
 docker compose up db -d
@@ -139,14 +146,22 @@ docker compose ps
 ### 5. Aplicar as migrações
 
 ```bash
-# Gerar migration (apenas quando houver mudanças nos models):
-alembic revision --autogenerate -m "descricao_da_mudanca"
-
-# Aplicar todas as migrações pendentes:
 alembic upgrade head
 ```
 
-### 6. Rodar o servidor
+### 6. Criar o primeiro usuário ADMIN
+
+```bash
+python scripts/create_admin.py
+```
+
+O script aceita entrada interativa ou variáveis de ambiente:
+
+```bash
+ADMIN_EMAIL=admin@ibmi.app ADMIN_PASSWORD=s3nh@F0rte python scripts/create_admin.py
+```
+
+### 7. Rodar o servidor
 
 ```bash
 uvicorn app.main:app --reload
@@ -166,6 +181,9 @@ docker compose up -d
 # Aplicar migrações dentro do container
 docker compose exec backend alembic upgrade head
 
+# Criar primeiro ADMIN dentro do container
+docker compose exec backend python scripts/create_admin.py
+
 # Acompanhar logs
 docker compose logs -f backend
 ```
@@ -173,8 +191,6 @@ docker compose logs -f backend
 ---
 
 ## Fluxo de trabalho com Alembic
-
-O Alembic gerencia a evolução do schema do banco. O fluxo padrão é:
 
 ```
 Editar model SQLAlchemy
@@ -189,22 +205,23 @@ alembic upgrade head
 Comandos úteis:
 
 ```bash
-# Ver status das migrações
-alembic current
-
-# Ver histórico de migrações
-alembic history
-
-# Reverter a última migração
-alembic downgrade -1
-
-# Reverter todas as migrações
-alembic downgrade base
+alembic current      # status das migrações
+alembic history      # histórico
+alembic downgrade -1 # reverter última
+alembic downgrade base # reverter todas
 ```
 
-> **Atenção:** sempre revise o arquivo gerado pelo `--autogenerate` antes de aplicar.
-> O Alembic não detecta automaticamente renomeações de colunas/tabelas — ele trata
-> como DROP + CREATE, o que causa perda de dados.
+---
+
+## Endpoints de autenticação (Bloco 2 — implementado)
+
+| Método | Rota | Acesso | Descrição |
+|---|---|---|---|
+| `POST` | `/api/v1/auth/login` | público | Retorna access + refresh token |
+| `POST` | `/api/v1/auth/refresh` | público | Renova tokens (rotação) |
+| `POST` | `/api/v1/auth/logout` | autenticado | Revoga refresh token |
+| `POST` | `/api/v1/auth/register` | ADMIN | Cria novo usuário |
+| `GET` | `/api/v1/auth/me` | autenticado | Dados do usuário atual |
 
 ---
 
@@ -216,12 +233,15 @@ alembic downgrade base
 | **Migrations** | Alembic auto-generate | Gera DDL a partir dos models, evita escrita manual de SQL |
 | **Engine** | SQLAlchemy 2.0 async (asyncpg) | Compatível com FastAPI async por padrão |
 | **Timestamps** | `TimestampMixin` em `shared/mixins.py` | Reutilizável em todos os contextos |
-| **ALEMBIC_DATABASE_URL** | Variável separada no `.env` | Permite rodar Alembic localmente sem alterar `DATABASE_URL` |
+| **ALEMBIC_DATABASE_URL** | Variável com prioridade sobre `DATABASE_URL` | Permite rodar localmente sem alterar URL do Docker |
+| **Refresh token** | Hash SHA-256 no banco, 1 sessão/usuário | Segurança suficiente + logout real sem over-engineering |
+| **Hash de senha** | `bcrypt` direto (sem passlib) | Compatível com bcrypt 4+/5+; passlib não acompanhou API |
+| **Registro** | Restrito a ADMIN autenticado | Controle total sobre quem acessa o sistema |
+| **Primeiro ADMIN** | CLI Python (`scripts/create_admin.py`) | Seguro, explícito, sem expor rota pública |
 
 ---
 
 ## Próximos passos
 
-- [ ] **Bloco 2** — Auth: `POST /auth/login`, `POST /auth/refresh`, `POST /auth/register`, dependências `get_current_user` e `require_admin`
 - [ ] **Bloco 3** — CRUDs por contexto: `estrutura_eclesiastica` → `pessoas_ministerios` → `agenda_escalas`
 - [ ] **Bloco 4** — Regras de visibilidade e geração de ocorrências a partir de recorrência
