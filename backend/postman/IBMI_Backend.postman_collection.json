@@ -1,13 +1,23 @@
 {
   "info": {
     "name": "IBMI Backend",
-    "description": "Rotas da API FastAPI para testes no Postman. Inicie o servidor com: `uvicorn app.main:app --reload` (na pasta backend com venv ativo).",
+    "description": "Rotas da API FastAPI para testes no Postman.\n\nInicie o servidor com:\n  uvicorn app.main:app --reload\n\nFluxo de autenticação:\n1. POST /auth/login → copie o access_token e refresh_token para as variáveis da coleção\n2. As rotas protegidas usam {{access_token}} automaticamente\n3. POST /auth/refresh → renova os tokens\n4. POST /auth/logout → revoga o refresh token",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     {
       "key": "base_url",
       "value": "http://localhost:8000"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "description": "Preenchido manualmente após POST /auth/login"
+    },
+    {
+      "key": "refresh_token",
+      "value": "",
+      "description": "Preenchido manualmente após POST /auth/login ou /auth/refresh"
     }
   ],
   "item": [
@@ -26,37 +36,110 @@
         "method": "GET",
         "header": [],
         "url": "{{base_url}}/api/v1/openapi.json",
-        "description": "Especificação OpenAPI. Use para importar a API no Postman (Import > Link)."
+        "description": "Especificação OpenAPI completa."
       }
     },
     {
       "name": "Auth",
       "item": [
         {
-          "name": "Login (POST)",
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('access_token', body.access_token);",
+                  "    pm.collectionVariables.set('refresh_token', body.refresh_token);",
+                  "    console.log('Tokens salvos nas variáveis da coleção.');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"usuario@exemplo.com\",\n  \"password\": \"senha\"\n}"
+              "raw": "{\n  \"email\": \"admin@ibmi.app\",\n  \"password\": \"sua_senha_aqui\"\n}"
             },
             "url": "{{base_url}}/api/v1/auth/login",
-            "description": "Em implementação."
+            "description": "Autentica o usuário e retorna access_token (JWT, 30 min) e refresh_token (opaco, 7 dias).\n\nO script de teste salva os tokens automaticamente nas variáveis da coleção."
           }
-        }
-      ]
-    },
-    {
-      "name": "Pessoas & Ministérios",
-      "item": [
+        },
         {
-          "name": "Listar membros (GET)",
+          "name": "Me (usuário atual)",
           "request": {
             "method": "GET",
-            "header": [],
-            "url": "{{base_url}}/api/v1/pessoas-ministerios/membros",
-            "description": "Em implementação."
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": "{{base_url}}/api/v1/auth/me",
+            "description": "Retorna os dados do usuário autenticado.\n\nRequer access_token válido no header Authorization."
+          }
+        },
+        {
+          "name": "Refresh",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('access_token', body.access_token);",
+                  "    pm.collectionVariables.set('refresh_token', body.refresh_token);",
+                  "    console.log('Tokens renovados e salvos nas variáveis da coleção.');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{refresh_token}}\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/auth/refresh",
+            "description": "Renova o par de tokens usando o refresh_token atual.\n\nO token anterior é revogado (rotação). O script de teste salva os novos tokens automaticamente.\n\nErros esperados:\n- 401 se o refresh_token for inválido, revogado ou expirado."
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": "{{base_url}}/api/v1/auth/logout",
+            "description": "Revoga o refresh_token do usuário autenticado.\n\nO access_token continua válido até expirar (30 min) — comportamento intencional.\n\nResposta esperada: 204 No Content."
+          }
+        },
+        {
+          "name": "Register (ADMIN)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"membro@ibmi.app\",\n  \"password\": \"senha1234\",\n  \"perfil\": \"MEMBRO\",\n  \"membro_id\": null\n}"
+            },
+            "url": "{{base_url}}/api/v1/auth/register",
+            "description": "Cria um novo usuário. Restrito a usuários com perfil ADMIN.\n\nCampos:\n- email: obrigatório\n- password: obrigatório, mín. 8 caracteres\n- perfil: ADMIN ou MEMBRO (padrão: MEMBRO)\n- membro_id: opcional — vincula o usuário a um Membro existente\n\nErros esperados:\n- 400 se e-mail já cadastrado ou membro_id inválido\n- 403 se o usuário autenticado não for ADMIN"
           }
         }
       ]
@@ -68,9 +151,27 @@
           "name": "Listar igrejas (GET)",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
             "url": "{{base_url}}/api/v1/estrutura-eclesiastica/igrejas",
-            "description": "Em implementação."
+            "description": "Em implementação — Bloco 3."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Pessoas & Ministérios",
+      "item": [
+        {
+          "name": "Listar membros (GET)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": "{{base_url}}/api/v1/pessoas-ministerios/membros",
+            "description": "Em implementação — Bloco 3."
           }
         }
       ]
@@ -82,9 +183,11 @@
           "name": "Listar ocorrências (GET)",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
             "url": "{{base_url}}/api/v1/agenda-escalas/ocorrencias",
-            "description": "Em implementação."
+            "description": "Em implementação — Bloco 3/4."
           }
         }
       ]
@@ -96,9 +199,11 @@
           "name": "Relatório por período (GET)",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
             "url": "{{base_url}}/api/v1/relatorios/eventos-periodo",
-            "description": "Em implementação."
+            "description": "Em implementação — Bloco 4."
           }
         }
       ]
