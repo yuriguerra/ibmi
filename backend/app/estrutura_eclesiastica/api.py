@@ -30,7 +30,7 @@ async def listar_igrejas(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ) -> List[IgrejaResponse]:
-    """Lista todas as igrejas/congregações. Requer autenticação."""
+    """Lista igrejas ativas. Requer autenticação."""
     return await igreja_service.listar(db, limit=limit, offset=offset)
 
 
@@ -40,7 +40,7 @@ async def obter_igreja(
     _: CurrentUser,
     db: DB,
 ) -> IgrejaResponse:
-    """Retorna uma igreja pelo ID."""
+    """Retorna uma igreja ativa pelo ID."""
     igreja = await igreja_service.obter(db, igreja_id)
     if not igreja:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Igreja não encontrada.")
@@ -83,8 +83,28 @@ async def deletar_igreja(
     _: AdminUser,
     db: DB,
 ) -> None:
-    """Remove uma igreja. Restrito a ADMIN."""
+    """Soft delete de uma igreja. Restrito a ADMIN."""
     deletado = await igreja_service.deletar(db, igreja_id)
+    if not deletado:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Igreja não encontrada.")
+
+
+@router.delete(
+    "/igrejas/{igreja_id}/permanente",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Remover igreja permanentemente (LGPD)",
+)
+async def deletar_igreja_permanente(
+    igreja_id: int,
+    _: AdminUser,
+    db: DB,
+) -> None:
+    """
+    Hard delete — remove fisicamente todos os dados da igreja.
+    Use apenas para atender solicitações de exclusão de dados (LGPD).
+    Restrito a ADMIN.
+    """
+    deletado = await igreja_service.deletar_permanente(db, igreja_id)
     if not deletado:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Igreja não encontrada.")
 
@@ -99,7 +119,7 @@ async def listar_departamentos(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ) -> List[DepartamentoResponse]:
-    """Lista departamentos de uma igreja. Requer autenticação."""
+    """Lista departamentos ativos de uma igreja. Requer autenticação."""
     igreja = await igreja_service.obter(db, igreja_id)
     if not igreja:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Igreja não encontrada.")
@@ -112,7 +132,7 @@ async def obter_departamento(
     _: CurrentUser,
     db: DB,
 ) -> DepartamentoResponse:
-    """Retorna um departamento pelo ID."""
+    """Retorna um departamento ativo pelo ID."""
     dep = await igreja_service.obter_departamento(db, departamento_id)
     if not dep:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Departamento não encontrado.")
@@ -152,7 +172,27 @@ async def deletar_departamento(
     _: AdminUser,
     db: DB,
 ) -> None:
-    """Remove um departamento. Restrito a ADMIN."""
+    """Soft delete de um departamento. Restrito a ADMIN."""
     deletado = await igreja_service.deletar_departamento(db, departamento_id)
+    if not deletado:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Departamento não encontrado.")
+
+
+@router.delete(
+    "/departamentos/{departamento_id}/permanente",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Remover departamento permanentemente (LGPD)",
+)
+async def deletar_departamento_permanente(
+    departamento_id: int,
+    _: AdminUser,
+    db: DB,
+) -> None:
+    """
+    Hard delete — remove fisicamente todos os dados do departamento.
+    Use apenas para atender solicitações de exclusão de dados (LGPD).
+    Restrito a ADMIN.
+    """
+    deletado = await igreja_service.deletar_departamento_permanente(db, departamento_id)
     if not deletado:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Departamento não encontrado.")

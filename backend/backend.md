@@ -19,13 +19,14 @@ backend/
 │   ├── script.py.mako                  # Template para arquivos de migration
 │   └── versions/                       # Migrations geradas
 │       ├── 20260317_221334_initial_schema.py
-│       └── 20260329_000000_add_refresh_tokens.py
+│       ├── 20260329_000000_add_refresh_tokens.py
+│       └── 20260331_000000_add_soft_delete.py
 ├── scripts/
 │   └── create_admin.py                 # CLI para criar primeiro usuário ADMIN
 └── app/
     ├── main.py                         # Entrada FastAPI, lifespan, CORS
     ├── shared/
-    │   ├── mixins.py                   # TimestampMixin (created_at, updated_at)
+    │   ├── mixins.py                   # TimestampMixin, SoftDeleteMixin
     │   └── all_models.py               # Importa todos os models (usado pelo Alembic)
     ├── core/
     │   ├── config.py                   # Settings via Pydantic Settings
@@ -35,7 +36,7 @@ backend/
     │   ├── deps.py                     # get_current_user, require_admin, CurrentUser, AdminUser
     │   └── v1/
     │       └── router.py               # Agrega todos os routers
-    ├── auth/                           # Contexto: Autenticação
+    ├── auth/                           # Contexto: Autenticação ✅
     │   ├── models/
     │   │   ├── usuario.py              # Model: Usuario (credenciais + perfil)
     │   │   └── refresh_token.py        # Model: RefreshToken (1 sessão por usuário)
@@ -44,30 +45,31 @@ backend/
     │   ├── services/
     │   │   └── auth_service.py         # login, register, refresh, logout
     │   └── api.py                      # POST /login, /refresh, /logout, /register; GET /me
-    ├── estrutura_eclesiastica/         # Contexto: Estrutura Eclesiástica
+    ├── estrutura_eclesiastica/         # Contexto: Estrutura Eclesiástica ✅
     │   ├── models/
-    │   │   └── igreja.py              # Models: Igreja, Departamento
+    │   │   └── igreja.py               # Models: Igreja, Departamento
     │   ├── schemas/
-    │   ├── repositories/
+    │   │   └── estrutura.py            # Schemas: Igreja, Departamento
+    │   ├── services/
+    │   │   └── estrutura_service.py    # CRUD Igreja + Departamento, soft/hard delete
+    │   └── api.py                      # Rotas CRUD + /permanente (LGPD)
+    ├── pessoas_ministerios/            # Contexto: Pessoas & Ministérios ✅
+    │   ├── models/
+    │   │   └── membro.py               # Models: Membro, Ministerio, associações N:N
+    │   ├── schemas/
+    │   │   └── pessoas.py              # Schemas: Membro, Ministério, vínculos
+    │   ├── services/
+    │   │   └── pessoas_service.py      # CRUD Membro + Ministério, vínculos N:N, soft/hard delete
+    │   └── api.py                      # Rotas CRUD + vínculos + /permanente (LGPD)
+    ├── agenda_escalas/                 # Contexto: Agenda & Escalas 🔜
+    │   ├── models/
+    │   │   └── agenda.py               # Models: TipoEvento, Evento, EventoRecorrencia,
+    │   │                               #         EventoOcorrencia, EscalaMinisterioOcorrencia,
+    │   │                               #         EventoDepartamento, EventoMinisterio, EventoMembro
+    │   ├── schemas/
     │   ├── services/
     │   └── api.py
-    ├── pessoas_ministerios/            # Contexto: Pessoas & Ministérios
-    │   ├── models/
-    │   │   └── membro.py              # Models: Membro, Ministerio, MembroDepartamento, MembroMinisterio
-    │   ├── schemas/
-    │   ├── repositories/
-    │   ├── services/
-    │   └── api.py
-    ├── agenda_escalas/                 # Contexto: Agenda & Escalas
-    │   ├── models/
-    │   │   └── agenda.py              # Models: TipoEvento, Evento, EventoRecorrencia,
-    │   │                              #         EventoOcorrencia, EscalaMinisterioOcorrencia,
-    │   │                              #         EventoDepartamento, EventoMinisterio, EventoMembro
-    │   ├── schemas/
-    │   ├── repositories/
-    │   ├── services/
-    │   └── api.py
-    └── relatorios_historico/          # Contexto: Relatórios & Histórico
+    └── relatorios_historico/           # Contexto: Relatórios & Histórico 🔜
         ├── schemas/
         ├── services/
         └── api.py
@@ -205,15 +207,17 @@ alembic upgrade head
 Comandos úteis:
 
 ```bash
-alembic current      # status das migrações
-alembic history      # histórico
-alembic downgrade -1 # reverter última
+alembic current        # status das migrações
+alembic history        # histórico
+alembic downgrade -1   # reverter última
 alembic downgrade base # reverter todas
 ```
 
 ---
 
-## Endpoints de autenticação (Bloco 2 — implementado)
+## Endpoints implementados
+
+### Auth (Bloco 2)
 
 | Método | Rota | Acesso | Descrição |
 |---|---|---|---|
@@ -222,6 +226,83 @@ alembic downgrade base # reverter todas
 | `POST` | `/api/v1/auth/logout` | autenticado | Revoga refresh token |
 | `POST` | `/api/v1/auth/register` | ADMIN | Cria novo usuário |
 | `GET` | `/api/v1/auth/me` | autenticado | Dados do usuário atual |
+
+### Estrutura Eclesiástica (Bloco 3)
+
+| Método | Rota | Acesso | Descrição |
+|---|---|---|---|
+| `GET` | `/api/v1/estrutura-eclesiastica/igrejas` | autenticado | Lista igrejas ativas |
+| `GET` | `/api/v1/estrutura-eclesiastica/igrejas/{id}` | autenticado | Detalhe de uma igreja |
+| `POST` | `/api/v1/estrutura-eclesiastica/igrejas` | ADMIN | Cria igreja/congregação |
+| `PATCH` | `/api/v1/estrutura-eclesiastica/igrejas/{id}` | ADMIN | Atualiza igreja |
+| `DELETE` | `/api/v1/estrutura-eclesiastica/igrejas/{id}` | ADMIN | Soft delete |
+| `DELETE` | `/api/v1/estrutura-eclesiastica/igrejas/{id}/permanente` | ADMIN | Hard delete (LGPD) |
+| `GET` | `/api/v1/estrutura-eclesiastica/igrejas/{id}/departamentos` | autenticado | Lista departamentos da igreja |
+| `GET` | `/api/v1/estrutura-eclesiastica/departamentos/{id}` | autenticado | Detalhe de departamento |
+| `POST` | `/api/v1/estrutura-eclesiastica/departamentos` | ADMIN | Cria departamento |
+| `PATCH` | `/api/v1/estrutura-eclesiastica/departamentos/{id}` | ADMIN | Atualiza departamento |
+| `DELETE` | `/api/v1/estrutura-eclesiastica/departamentos/{id}` | ADMIN | Soft delete |
+| `DELETE` | `/api/v1/estrutura-eclesiastica/departamentos/{id}/permanente` | ADMIN | Hard delete (LGPD) |
+
+### Pessoas & Ministérios (Bloco 3)
+
+| Método | Rota | Acesso | Descrição |
+|---|---|---|---|
+| `GET` | `/api/v1/pessoas-ministerios/ministerios` | autenticado | Lista ministérios (filtrável por `?igreja_id=`) |
+| `GET` | `/api/v1/pessoas-ministerios/ministerios/{id}` | autenticado | Detalhe de ministério |
+| `POST` | `/api/v1/pessoas-ministerios/ministerios` | ADMIN | Cria ministério |
+| `PATCH` | `/api/v1/pessoas-ministerios/ministerios/{id}` | ADMIN | Atualiza ministério |
+| `DELETE` | `/api/v1/pessoas-ministerios/ministerios/{id}` | ADMIN | Soft delete |
+| `DELETE` | `/api/v1/pessoas-ministerios/ministerios/{id}/permanente` | ADMIN | Hard delete (LGPD) |
+| `GET` | `/api/v1/pessoas-ministerios/membros` | autenticado | Lista membros (filtrável por `?igreja_id=` e `?status=`) |
+| `GET` | `/api/v1/pessoas-ministerios/membros/{id}` | autenticado | Detalhe de membro |
+| `POST` | `/api/v1/pessoas-ministerios/membros` | ADMIN | Cria membro |
+| `PATCH` | `/api/v1/pessoas-ministerios/membros/{id}` | ADMIN | Atualiza membro |
+| `DELETE` | `/api/v1/pessoas-ministerios/membros/{id}` | ADMIN | Soft delete |
+| `DELETE` | `/api/v1/pessoas-ministerios/membros/{id}/permanente` | ADMIN | Hard delete (LGPD) |
+| `POST` | `/api/v1/pessoas-ministerios/membros/{id}/departamentos` | ADMIN | Vincula membro a departamento |
+| `DELETE` | `/api/v1/pessoas-ministerios/membros/{id}/departamentos/{dep_id}` | ADMIN | Remove vínculo membro-departamento |
+| `POST` | `/api/v1/pessoas-ministerios/membros/{id}/ministerios` | ADMIN | Vincula membro a ministério (com função) |
+| `DELETE` | `/api/v1/pessoas-ministerios/membros/{id}/ministerios/{min_id}` | ADMIN | Remove vínculo membro-ministério |
+
+---
+
+## Roadmap de implementação
+
+### ✅ Bloco 1 — Fundação
+- Estrutura de projeto, modelos SQLAlchemy, migration inicial, docker-compose, Alembic
+
+### ✅ Bloco 2 — Autenticação
+- Login, refresh token (hash SHA-256, 1 sessão/usuário), logout, registro (ADMIN), `/me`
+- Dependências `get_current_user` e `require_admin`
+- CLI `create_admin.py` para primeiro ADMIN
+
+### ✅ Bloco 3 — CRUDs base
+- `estrutura_eclesiastica`: Igreja (MATRIZ/CONGREGAÇÃO com validação), Departamento
+- `pessoas_ministerios`: Membro, Ministério, vínculos N:N (membro-departamento, membro-ministério)
+- Soft delete (`deleted_at`) + hard delete (`/permanente`) em todas as entidades principais
+- Paginação `limit/offset` em todas as listagens
+- Testes básicos em `tests/test_bloco3.py`
+
+### 🔜 Bloco 3 — Pendências
+- [ ] Configurar `conftest.py` com banco de teste para rodar `pytest`
+- [ ] `pessoas_ministerios/schemas/__init__.py`
+- [ ] `TipoEvento` — CRUD simples em `agenda_escalas`
+
+### 🔜 Bloco 4 — Agenda & Escalas
+- [ ] Criação e edição de Evento mestre
+- [ ] Geração de ocorrências a partir de regras de recorrência
+  - Suporte a: diária, semanal (com intervalo), mensal, "primeiro domingo do mês", "todo dia 15"
+  - Data fim ou número máximo de ocorrências
+- [ ] Overrides pontuais por ocorrência (cancelamento, horário diferente, nota)
+- [ ] Escala de ministérios por ocorrência (CRUD + cópia entre ocorrências)
+- [ ] Regras de visibilidade na consulta de agenda (GERAL, por departamento, ministério, membro)
+- [ ] Endpoint de agenda com filtros (membro, departamento, ministério, igreja, tipo de evento)
+
+### 🔜 Bloco 5 — Fechamento
+- [ ] `relatorios_historico`: eventos realizados por período/igreja/tipo; membros por ministério
+- [ ] Atualização final do `backend.md`
+- [ ] Atualização final da coleção Postman
 
 ---
 
@@ -238,10 +319,7 @@ alembic downgrade base # reverter todas
 | **Hash de senha** | `bcrypt` direto (sem passlib) | Compatível com bcrypt 4+/5+; passlib não acompanhou API |
 | **Registro** | Restrito a ADMIN autenticado | Controle total sobre quem acessa o sistema |
 | **Primeiro ADMIN** | CLI Python (`scripts/create_admin.py`) | Seguro, explícito, sem expor rota pública |
-
----
-
-## Próximos passos
-
-- [ ] **Bloco 3** — CRUDs por contexto: `estrutura_eclesiastica` → `pessoas_ministerios` → `agenda_escalas`
-- [ ] **Bloco 4** — Regras de visibilidade e geração de ocorrências a partir de recorrência
+| **Soft delete** | Campo `deleted_at TIMESTAMPTZ` | Preserva histórico; `IS NULL` = ativo |
+| **Hard delete** | Rota separada `DELETE /{id}/permanente` | Atende LGPD sem expor operação destrutiva no fluxo normal |
+| **Paginação** | `limit/offset` em todas as listagens | Simples e suficiente para o porte (~300 membros) |
+| **Padrão de camadas** | Service + Router (sem repository) | Separa HTTP de negócio sem burocracia desnecessária para o porte |
