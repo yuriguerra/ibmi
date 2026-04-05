@@ -3,25 +3,19 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from jose import jwt
-from passlib.context import CryptContext
+import bcrypt
 
 from app.core.config import get_settings
 
 settings = get_settings()
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-
 # ─── Senha ────────────────────────────────────────────────────────────────────
 
 def get_password_hash(password: str) -> str:
-    """Retorna o hash bcrypt da senha em texto puro."""
-    return pwd_context.hash(password)
-
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verifica se a senha em texto puro corresponde ao hash armazenado."""
-    return pwd_context.verify(plain_password, hashed_password)
+    return bcrypt.checkpw(plain_password.encode(), hashed_password.encode())
 
 
 # ─── Tokens JWT ───────────────────────────────────────────────────────────────

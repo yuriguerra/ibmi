@@ -5,10 +5,10 @@ from sqlalchemy import BigInteger, ForeignKey, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
-from app.shared.mixins import TimestampMixin
+from app.shared.mixins import SoftDeleteMixin, TimestampMixin
 
 
-class Igreja(Base, TimestampMixin):
+class Igreja(Base, TimestampMixin, SoftDeleteMixin):
     """
     Igreja ou congregação dentro da organização.
 
@@ -21,7 +21,6 @@ class Igreja(Base, TimestampMixin):
     nome: Mapped[str] = mapped_column(Text, nullable=False)
     endereco: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    # MATRIZ | CONGREGACAO
     tipo: Mapped[str] = mapped_column(
         Text,
         nullable=False,
@@ -29,7 +28,6 @@ class Igreja(Base, TimestampMixin):
         comment="MATRIZ | CONGREGACAO",
     )
 
-    # Auto-referência: congregação aponta para a matriz
     igreja_mae_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
         ForeignKey("igrejas.id", ondelete="SET NULL"),
@@ -37,7 +35,6 @@ class Igreja(Base, TimestampMixin):
         index=True,
     )
 
-    # Relacionamentos
     congregacoes: Mapped[List["Igreja"]] = relationship(
         "Igreja",
         back_populates="igreja_mae",
@@ -56,7 +53,7 @@ class Igreja(Base, TimestampMixin):
     )
 
 
-class Departamento(Base, TimestampMixin):
+class Departamento(Base, TimestampMixin, SoftDeleteMixin):
     """Departamento dentro de uma Igreja (ex.: Jovens, Louvor, Infância)."""
 
     __tablename__ = "departamentos"
@@ -72,5 +69,4 @@ class Departamento(Base, TimestampMixin):
         index=True,
     )
 
-    # Relacionamentos
     igreja: Mapped["Igreja"] = relationship("Igreja", back_populates="departamentos")

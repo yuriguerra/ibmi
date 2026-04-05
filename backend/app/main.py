@@ -4,6 +4,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+import app.shared.all_models  # noqa: F401 — garante registro de todos os modelos SQLAlchemy
+
 from app.api.v1.router import api_router
 from app.core.config import get_settings
 

@@ -6,10 +6,8 @@ from sqlalchemy import BigInteger, Date, ForeignKey, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
-from app.shared.mixins import TimestampMixin
+from app.shared.mixins import SoftDeleteMixin, TimestampMixin
 
-
-# ─── Tabelas de associação N:N ────────────────────────────────────────────────
 
 class MembroDepartamento(Base):
     """Associação N:N entre Membro e Departamento."""
@@ -17,14 +15,10 @@ class MembroDepartamento(Base):
     __tablename__ = "membro_departamento"
 
     membro_id: Mapped[int] = mapped_column(
-        BigInteger,
-        ForeignKey("membros.id", ondelete="CASCADE"),
-        primary_key=True,
+        BigInteger, ForeignKey("membros.id", ondelete="CASCADE"), primary_key=True,
     )
     departamento_id: Mapped[int] = mapped_column(
-        BigInteger,
-        ForeignKey("departamentos.id", ondelete="CASCADE"),
-        primary_key=True,
+        BigInteger, ForeignKey("departamentos.id", ondelete="CASCADE"), primary_key=True,
     )
 
 
@@ -34,26 +28,20 @@ class MembroMinisterio(Base):
     __tablename__ = "membro_ministerio"
 
     membro_id: Mapped[int] = mapped_column(
-        BigInteger,
-        ForeignKey("membros.id", ondelete="CASCADE"),
-        primary_key=True,
+        BigInteger, ForeignKey("membros.id", ondelete="CASCADE"), primary_key=True,
     )
     ministerio_id: Mapped[int] = mapped_column(
-        BigInteger,
-        ForeignKey("ministerios.id", ondelete="CASCADE"),
-        primary_key=True,
+        BigInteger, ForeignKey("ministerios.id", ondelete="CASCADE"), primary_key=True,
     )
     funcao: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     observacoes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 
-# ─── Entidades principais ─────────────────────────────────────────────────────
-
-class Membro(Base, TimestampMixin):
+class Membro(Base, TimestampMixin, SoftDeleteMixin):
     """
     Pessoa cadastrada na organização.
 
-    Pode ou não ter um Usuario vinculado para acesso ao sistema.
+    Soft delete padrão. Hard delete disponível para atender LGPD.
     Status controla participação ativa: ATIVO | EM_OBSERVACAO | DESLIGADO.
     """
 
@@ -65,7 +53,6 @@ class Membro(Base, TimestampMixin):
     email: Mapped[Optional[str]] = mapped_column(Text, nullable=True, index=True)
     telefone: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    # ATIVO | EM_OBSERVACAO | DESLIGADO
     status: Mapped[str] = mapped_column(
         Text,
         nullable=False,
@@ -80,10 +67,8 @@ class Membro(Base, TimestampMixin):
         index=True,
     )
 
-    # Relacionamentos
     igreja_principal: Mapped[Optional["Igreja"]] = relationship(  # noqa: F821
-        "Igreja",
-        lazy="select",
+        "Igreja", lazy="select",
     )
     departamentos: Mapped[List["Departamento"]] = relationship(  # noqa: F821
         "Departamento",
@@ -95,7 +80,6 @@ class Membro(Base, TimestampMixin):
         secondary="membro_ministerio",
         lazy="select",
     )
-    # Vínculo inverso com Usuario (um Membro pode ter um Usuário)
     usuario: Mapped[Optional["Usuario"]] = relationship(  # noqa: F821
         "Usuario",
         back_populates="membro",
@@ -103,7 +87,7 @@ class Membro(Base, TimestampMixin):
     )
 
 
-class Ministerio(Base, TimestampMixin):
+class Ministerio(Base, TimestampMixin, SoftDeleteMixin):
     """
     Ministério dentro de uma Igreja (ex.: Louvor, Intercessão, Recepção).
 
@@ -123,5 +107,4 @@ class Ministerio(Base, TimestampMixin):
         index=True,
     )
 
-    # Relacionamentos
     igreja: Mapped["Igreja"] = relationship("Igreja", lazy="select")  # noqa: F821
