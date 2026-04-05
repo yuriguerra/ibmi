@@ -1,1 +1,36 @@
-"""Schemas para tipos de evento, eventos, recorrência, ocorrências, visibilidade e escala."""
+"""Schemas Pydantic para o contexto Agenda & Escalas."""
+from app.agenda_escalas.schemas.agenda import (
+    AgendaFiltros,
+    CopiarEscalaRequest,
+    EscalaCreate,
+    EscalaResponse,
+    EscalaUpdate,
+    EventoCreate,
+    EventoResponse,
+    EventoUpdate,
+    OcorrenciaOverride,
+    OcorrenciaResponse,
+    RecorrenciaCreate,
+    RecorrenciaResponse,
+    TipoEventoCreate,
+    TipoEventoResponse,
+    TipoEventoUpdate,
+)
+
+__all__ = [
+    "TipoEventoCreate",
+    "TipoEventoUpdate",
+    "TipoEventoResponse",
+    "RecorrenciaCreate",
+    "RecorrenciaResponse",
+    "EventoCreate",
+    "EventoUpdate",
+    "EventoResponse",
+    "OcorrenciaOverride",
+    "OcorrenciaResponse",
+    "EscalaCreate",
+    "EscalaUpdate",
+    "EscalaResponse",
+    "CopiarEscalaRequest",
+    "AgendaFiltros",
+]
